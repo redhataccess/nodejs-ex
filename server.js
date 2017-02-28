@@ -3,7 +3,7 @@ const express = require('express'),
     fs      = require('fs'),
     app     = express(),
     eps     = require('ejs'),
-    morgan  = require('morgan')
+    morgan  = require('morgan'),
     https = require('https'),
     fetch   = require('node-fetch');
 
@@ -42,8 +42,8 @@ app.get('/', function (req, res) {
 
 // error handling
 app.use(function(err, req, res, next){
-  console.error(err.stack);
-  res.status(500).send('Something bad happened!');
+    console.error(err.stack);
+    res.status(500).send('Something bad happened!');
 });
 
 app.listen(port, ip);
@@ -59,7 +59,7 @@ function getBuildDate(text) {
     return new Date(dateText[1]);
 }
 function networkErrorHandler() {
-    console.log(arguments);
+    console.log('Networking error: ', arguments);
 }
 
 function fetchBuildDates(env, app, path) {
@@ -73,12 +73,14 @@ function fetchBuildDates(env, app, path) {
         ENV[env] + path,
         { agent: new https.Agent(agentOptions) }
     ).then(getResponseText)
-    .then(getBuildDate);
+        .then(getBuildDate)
+        .catch(networkErrorHandler);
     const fetchChrome = fetch(
         ENV[env] + '/services/chrome/head',
         { agent: new https.Agent(agentOptions) }
     ).then(getResponseText)
-    .then(getBuildDate);
+        .then(getBuildDate)
+        .catch(networkErrorHandler);
 
     return Promise.all([fetchAppChrome, fetchChrome]);
 }
