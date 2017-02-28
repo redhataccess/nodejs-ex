@@ -107,6 +107,6 @@ function checkAllApps() {
 
 
 checkAllApps();
-setInterval(checkAllApps, 5000);
+setInterval(checkAllApps, 15*60*1000);
 
 module.exports = app ;
