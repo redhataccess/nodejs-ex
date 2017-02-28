@@ -8,9 +8,9 @@ const express = require('express'),
     fetch   = require('node-fetch');
 
 const ENV = {
-    // PROD: process.env.PORTAL_PROD_HOST,
-    // STAGE: process.env.PORTAL_STAGE_HOST,
-    // QA: process.env.PORTAL_QA_HOST,
+    PROD: process.env.PORTAL_PROD_HOST,
+    STAGE: process.env.PORTAL_STAGE_HOST,
+    QA: process.env.PORTAL_QA_HOST,
     DEV: process.env.PORTAL_DEV_HOST,
 };
 
@@ -91,15 +91,17 @@ function compareBuildDates(app, env) {
 // for each environment
 function checkAllApps() {
     Object.keys(ENV).forEach(env => {
-        // for each application
-        apps.forEach(app => {
-            // for each path owned by that application
-            app.paths.forEach(path => {
-                // check chrome build dates
-                fetchBuildDates(ENV[env], path)
-                    .then(compareBuildDates(app, env));
+        if (ENV[env]) {
+            // for each application
+            apps.forEach(app => {
+                // for each path owned by that application
+                app.paths.forEach(path => {
+                    // check chrome build dates
+                    fetchBuildDates(ENV[env], path)
+                        .then(compareBuildDates(app, env));
+                });
             });
-        });
+        }
     });
 }
 
