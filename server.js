@@ -1,94 +1,39 @@
 //  OpenShift sample Node application
-var express = require('express'),
+const express = require('express'),
     fs      = require('fs'),
     app     = express(),
     eps     = require('ejs'),
-    morgan  = require('morgan');
-    
+    morgan  = require('morgan')
+    https = require('https'),
+    fetch   = require('node-fetch');
+
+const ENV = {
+    // PROD: process.env.PORTAL_PROD_HOST,
+    // STAGE: process.env.PORTAL_STAGE_HOST,
+    // QA: process.env.PORTAL_QA_HOST,
+    DEV: process.env.PORTAL_DEV_HOST,
+};
+
+const apps = [
+    {
+        "name": "Drupal",
+        "paths": ['/']
+    },
+];
+
+const results = {
+};
+
 Object.assign=require('object-assign')
 
 app.engine('html', require('ejs').renderFile);
-app.use(morgan('combined'))
+app.use(morgan('combined'));
 
 var port = process.env.PORT || process.env.OPENSHIFT_NODEJS_PORT || 8080,
-    ip   = process.env.IP   || process.env.OPENSHIFT_NODEJS_IP || '0.0.0.0',
-    mongoURL = process.env.OPENSHIFT_MONGODB_DB_URL || process.env.MONGO_URL,
-    mongoURLLabel = "";
-
-if (mongoURL == null && process.env.DATABASE_SERVICE_NAME) {
-  var mongoServiceName = process.env.DATABASE_SERVICE_NAME.toUpperCase(),
-      mongoHost = process.env[mongoServiceName + '_SERVICE_HOST'],
-      mongoPort = process.env[mongoServiceName + '_SERVICE_PORT'],
-      mongoDatabase = process.env[mongoServiceName + '_DATABASE'],
-      mongoPassword = process.env[mongoServiceName + '_PASSWORD']
-      mongoUser = process.env[mongoServiceName + '_USER'];
-
-  if (mongoHost && mongoPort && mongoDatabase) {
-    mongoURLLabel = mongoURL = 'mongodb://';
-    if (mongoUser && mongoPassword) {
-      mongoURL += mongoUser + ':' + mongoPassword + '@';
-    }
-    // Provide UI label that excludes user id and pw
-    mongoURLLabel += mongoHost + ':' + mongoPort + '/' + mongoDatabase;
-    mongoURL += mongoHost + ':' +  mongoPort + '/' + mongoDatabase;
-
-  }
-}
-var db = null,
-    dbDetails = new Object();
-
-var initDb = function(callback) {
-  if (mongoURL == null) return;
-
-  var mongodb = require('mongodb');
-  if (mongodb == null) return;
-
-  mongodb.connect(mongoURL, function(err, conn) {
-    if (err) {
-      callback(err);
-      return;
-    }
-
-    db = conn;
-    dbDetails.databaseName = db.databaseName;
-    dbDetails.url = mongoURLLabel;
-    dbDetails.type = 'MongoDB';
-
-    console.log('Connected to MongoDB at: %s', mongoURL);
-  });
-};
+    ip   = process.env.IP   || process.env.OPENSHIFT_NODEJS_IP || '0.0.0.0';
 
 app.get('/', function (req, res) {
-  // try to initialize the db on every request if it's not already
-  // initialized.
-  if (!db) {
-    initDb(function(err){});
-  }
-  if (db) {
-    var col = db.collection('counts');
-    // Create a document with request IP and current time of request
-    col.insert({ip: req.ip, date: Date.now()});
-    col.count(function(err, count){
-      res.render('index.html', { pageCountMessage : count, dbInfo: dbDetails });
-    });
-  } else {
-    res.render('index.html', { pageCountMessage : null});
-  }
-});
-
-app.get('/pagecount', function (req, res) {
-  // try to initialize the db on every request if it's not already
-  // initialized.
-  if (!db) {
-    initDb(function(err){});
-  }
-  if (db) {
-    db.collection('counts').count(function(err, count ){
-      res.send('{ pageCount: ' + count + '}');
-    });
-  } else {
-    res.send('{ pageCount: -1 }');
-  }
+    res.send(JSON.stringify(results, null, 4));
 });
 
 // error handling
@@ -97,11 +42,68 @@ app.use(function(err, req, res, next){
   res.status(500).send('Something bad happened!');
 });
 
-initDb(function(err){
-  console.log('Error connecting to Mongo. Message:\n'+err);
-});
-
 app.listen(port, ip);
 console.log('Server running on http://%s:%s', ip, port);
+
+function getResponseText(res) {return res.text(); }
+
+function getBuildDate(text) {
+    const dateText = /builddate.*"(.*)"/.exec(text) || {};
+    return new Date(dateText[1]);
+}
+function networkErrorHandler() {
+    console.log(arguments);
+}
+
+function fetchBuildDates(host, path) {
+    const agentOptions = {
+        rejectUnauthorized: false,
+    };
+
+    const fetchAppChrome = fetch(
+        host + path,
+        { agent: new https.Agent(agentOptions) }
+    ).then(getResponseText)
+    .then(getBuildDate);
+    const fetchChrome = fetch(
+        host + '/services/chrome/head',
+        { agent: new https.Agent(agentOptions) }
+    ).then(getResponseText)
+    .then(getBuildDate);
+
+    return Promise.all([fetchAppChrome, fetchChrome]);
+}
+
+function compareBuildDates(app, env) {
+    return dates => {
+        const appChromeDate = dates[0];
+        const chromeDate    = dates[1];
+        const hoursApart    = (chromeDate.getTime() - appChromeDate.getTime()) / (1000 * 60 * 60);
+
+        results[app.name] = hoursApart;
+
+        // console.log(JSON.stringify(results, null, 4));
+        console.log(`In ${env}, ${app.name}'s chrome is ${hoursApart.toFixed(1)} hours old.`);
+    };
+}
+
+// for each environment
+function checkAllApps() {
+    Object.keys(ENV).forEach(env => {
+        // for each application
+        apps.forEach(app => {
+            // for each path owned by that application
+            app.paths.forEach(path => {
+                // check chrome build dates
+                fetchBuildDates(ENV[env], path)
+                    .then(compareBuildDates(app, env));
+            });
+        });
+    });
+}
+
+
+checkAllApps();
+setInterval(checkAllApps, 5000);
 
 module.exports = app ;
