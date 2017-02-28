@@ -50,7 +50,9 @@ app.listen(port, ip);
 console.log('Server running on http://%s:%s', ip, port);
 console.log('Environment configuration:', JSON.stringify(ENV, null, 4));
 
-function getResponseText(res) {return res.text(); }
+function getResponseText(res) {
+    return res.text();
+}
 
 function getBuildDate(text) {
     const dateText = /builddate.*"(.*)"/.exec(text) || {};
@@ -60,18 +62,20 @@ function networkErrorHandler() {
     console.log(arguments);
 }
 
-function fetchBuildDates(host, path) {
+function fetchBuildDates(env, app, path) {
     const agentOptions = {
         rejectUnauthorized: false,
     };
 
+    console.log(`Requesting ${app.name} from ${env}...`);
+
     const fetchAppChrome = fetch(
-        host + path,
+        ENV[env] + path,
         { agent: new https.Agent(agentOptions) }
     ).then(getResponseText)
     .then(getBuildDate);
     const fetchChrome = fetch(
-        host + '/services/chrome/head',
+        ENV[env] + '/services/chrome/head',
         { agent: new https.Agent(agentOptions) }
     ).then(getResponseText)
     .then(getBuildDate);
@@ -88,7 +92,7 @@ function compareBuildDates(app, env) {
         results[env][app.name] = hoursApart;
 
         // console.log(JSON.stringify(results, null, 4));
-        console.log(`In ${env}, ${app.name}'s chrome is ${hoursApart.toFixed(1)} hours old.`);
+        console.log(`Response received from ${env}.  ${app.name}'s chrome is ${hoursApart.toFixed(1)} hours old.`);
     };
 }
 
@@ -101,7 +105,7 @@ function checkAllApps() {
                 // for each path owned by that application
                 app.paths.forEach(path => {
                     // check chrome build dates
-                    fetchBuildDates(ENV[env], path)
+                    fetchBuildDates(env, app, path)
                         .then(compareBuildDates(app, env));
                 });
             });
