@@ -44,6 +44,7 @@ app.use(function(err, req, res, next){
 
 app.listen(port, ip);
 console.log('Server running on http://%s:%s', ip, port);
+console.log('Environment configuration:', JSON.stringify(ENV, null, 4));
 
 function getResponseText(res) {return res.text(); }
 
