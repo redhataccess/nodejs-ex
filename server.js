@@ -22,6 +22,10 @@ const apps = [
 ];
 
 const results = {
+    PROD: {},
+    STAGE: {},
+    QA: {},
+    DEV: {},
 };
 
 Object.assign=require('object-assign')
@@ -81,7 +85,7 @@ function compareBuildDates(app, env) {
         const chromeDate    = dates[1];
         const hoursApart    = (chromeDate.getTime() - appChromeDate.getTime()) / (1000 * 60 * 60);
 
-        results[app.name] = hoursApart;
+        results[env][app.name] = hoursApart;
 
         // console.log(JSON.stringify(results, null, 4));
         console.log(`In ${env}, ${app.name}'s chrome is ${hoursApart.toFixed(1)} hours old.`);
