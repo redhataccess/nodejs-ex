@@ -14,12 +14,7 @@ const ENV = {
     DEV: process.env.PORTAL_DEV_HOST,
 };
 
-const apps = [
-    {
-        "name": "Drupal",
-        "paths": ['/']
-    },
-];
+const apps = require('./apps.json');
 
 const results = {
     PROD: {},
@@ -62,19 +57,22 @@ function networkErrorHandler() {
     console.log('Networking error: ', arguments);
 }
 
-function fetchBuildDates(env, app, path) {
+function fetchBuildDates(app, path, env) {
     const agentOptions = {
         rejectUnauthorized: false,
     };
 
-    console.log(`Requesting ${app.name} from ${env}...`);
+    console.log(`GET [${env}:${app.name}] ${path}`);
 
+    // fetch a page from the app and extract the build date from its chrome
     const fetchAppChrome = fetch(
         ENV[env] + path,
         { agent: new https.Agent(agentOptions) }
     ).then(getResponseText)
         .then(getBuildDate)
         .catch(networkErrorHandler);
+
+    // fetch the chrome directly from the chrome service and get build date
     const fetchChrome = fetch(
         ENV[env] + '/services/chrome/head',
         { agent: new https.Agent(agentOptions) }
@@ -85,16 +83,17 @@ function fetchBuildDates(env, app, path) {
     return Promise.all([fetchAppChrome, fetchChrome]);
 }
 
-function compareBuildDates(app, env) {
+function compareBuildDates(app, path, env) {
     return dates => {
         const appChromeDate = dates[0];
         const chromeDate    = dates[1];
         const hoursApart    = (chromeDate.getTime() - appChromeDate.getTime()) / (1000 * 60 * 60);
 
-        results[env][app.name] = hoursApart;
+        results[env][app.name] = results[env][app.name] || {};
+        results[env][app.name][path] = hoursApart;
 
         // console.log(JSON.stringify(results, null, 4));
-        console.log(`Response received from ${env}.  ${app.name}'s chrome is ${hoursApart.toFixed(1)} hours old.`);
+        console.log(`200 [${env}:${app.name}] ${path} is ${hoursApart.toFixed(1)} hours old`);
     };
 }
 
@@ -107,8 +106,8 @@ function checkAllApps() {
                 // for each path owned by that application
                 app.paths.forEach(path => {
                     // check chrome build dates
-                    fetchBuildDates(env, app, path)
-                        .then(compareBuildDates(app, env));
+                    fetchBuildDates(app, path, env)
+                        .then(compareBuildDates(app, path, env));
                 });
             });
         }
