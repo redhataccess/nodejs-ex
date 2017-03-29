@@ -1,3 +1,5 @@
+"use strict";
+
 //  OpenShift sample Node application
 const express = require('express'),
     fs      = require('fs'),
@@ -85,12 +87,23 @@ function fetchBuildDates(app, path, env) {
 
 function compareBuildDates(app, path, env) {
     return dates => {
-        const appChromeDate = dates[0];
-        const chromeDate    = dates[1];
-        const hoursApart    = (chromeDate.getTime() - appChromeDate.getTime()) / (1000 * 60 * 60);
+        const hour = 1000 * 60 * 60;
+        const appChromeDate = dates[0].getTime();
+        const chromeDate    = dates[1].getTime();
+        const nowDate       = new Date().getTime();
+        const hoursSinceLastBuild = (nowDate - chromeDate) / hour;
+        let hoursApart    = (chromeDate - appChromeDate) / hour;
 
+        // if the most recent cpchrome build just happened, we shouldn't
+        // penalize apps for not having fetched it yet.  give apps a ~couple
+        // hours of courtesy time.
+        if (hoursSinceLastBuild < 2) {
+            hoursApart = 'AWAITING_FRESH_CHROME';
+        }
         results[env][app.name] = results[env][app.name] || {};
         results[env][app.name][path] = hoursApart;
+
+        console.log(`${hoursSinceLastBuild} hours since last cp-chrome build`);
 
         // console.log(JSON.stringify(results, null, 4));
         console.log(`200 [${env}:${app.name}] ${path} is ${hoursApart.toFixed(1)} hours old`);
@@ -105,7 +118,7 @@ function checkAllApps() {
             apps.forEach(app => {
                 // for each path owned by that application
                 app.paths.forEach(path => {
-                    // check chrome build dates
+                    // check & update chrome build dates
                     fetchBuildDates(app, path, env)
                         .then(compareBuildDates(app, path, env));
                 });
